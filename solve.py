@@ -36,7 +36,7 @@ import os
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, regexp_extract_all, lit, split, explode, \
                                   element_at, regexp_extract, abs, broadcast, \
-                                  current_timestamp
+                                  current_timestamp, window
 from pyspark.sql.types import StringType, StructType, StructField, BinaryType, \
                               TimestampType, LongType, FloatType
 
@@ -152,7 +152,7 @@ withFileInformationProcessed = radiographyFile.select(
   element_at(split('path', r'[\\/]'), -1).alias('filename'),
   col('content').cast(StringType()).alias('content'),
   current_timestamp().alias('event_time')
-).withWatermark('event_time', '5 minute')
+).withWatermark('event_time', '25 minute')
 
 # Watermark sets the margin time that spark waits for late arriving data for adding it
 # to its supposed place instead of having to discard it. Calculated
@@ -220,8 +220,8 @@ oneRowPerBoneMeasurement = oneRowPerBoneMeasurementText.select(
 # Calculate the minimum difference atlas radiography against our radiography
 
 # broadcast marks a small datatable as small enough for broadcast joins
-# oneRowPerAtlasBoneMeasurementBroadcast = \
-#     broadcast(oneRowPerAtlasBoneMeasurement)
+oneRowPerAtlasBoneMeasurement = \
+    broadcast(oneRowPerAtlasBoneMeasurement)
 
 radiographyAndAtlasRadiographiesJoin = oneRowPerBoneMeasurement.join(
     oneRowPerAtlasBoneMeasurement,
@@ -248,9 +248,9 @@ withDifferences = radiographyAndAtlasRadiographiesJoin.select(
     col('event_time')
   )
 
-# totalDifferences = withDifferences \
-#     .groupBy(['event_time', 'atlas_age', 'gender']) \
-#     .sum("measurement_values_difference")
+totalDifferences = withDifferences \
+    .groupBy('filename', 'atlas_age', window('event_time', '10 minutes')) \
+    .sum("measurement_values_difference")
 
 # smallestDifferences = totalDifferences \
 #     .groupBy(['filename', 'event_time']) \
@@ -268,7 +268,7 @@ withDifferences = radiographyAndAtlasRadiographiesJoin.select(
 #   col('atlas_age').alias('age')
 # )
 
-query = oneRowPerBoneMeasurement \
+query = totalDifferences \
           .writeStream \
           .outputMode('append') \
           .format('console') \
