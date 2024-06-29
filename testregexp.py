@@ -1,0 +1,28 @@
+import re
+boneRegExp = r"(?m)(A|AN)\s+\w+\s+BONE\s+OF\s+MEASUREMENTS\s+(\w+\s+=\s+(\d*\.?\d+)\s+)+"
+text = '''
+COMPARE THE RADIOGRAPHY OBSERVED BY Ibrahim
+  USING THE realAtlas ATLAS
+  STARTING WITH GENDER male
+  DEFINED BY
+    A Radius BONE OF MEASUREMENTS
+    length = 7.2
+    width = 16
+    
+    AN Ulna BONE OF MEASUREMENTS
+    length = 5.1
+    width = 8.4
+
+    A Metacarpal BONE OF MEASUREMENTS
+    length = 3.7
+    widthEpiphysis2 = 9.5
+    widthEpiphysis3 = 10.134
+    widthEpiphysis4 = 8.394
+
+    AN Intersesamoids BONE OF MEASUREMENTS
+    distance = 1.2
+'''
+
+for match in re.finditer(boneRegExp, text):
+  print(match.group())
+  print('---')
