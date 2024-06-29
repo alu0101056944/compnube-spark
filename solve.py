@@ -152,7 +152,7 @@ withFileInformationProcessed = radiographyFile.select(
   col('content').cast(StringType()).alias('content')
 )
 
-boneRegExp = r"(?m)((A|AN)\s+\w+\s+BONE\s+OF\s+MEASUREMENTS\s+(\w+\s+=\s+(\d*\.?\d+)\s+)+)"
+boneRegExp = r"(?m)(((A|AN)\s+)?\w+\s+BONE\s+OF\s+MEASUREMENTS\s+(\w+\s+=\s+(\d*\.?\d+)\s+)+)"
 genderRegExp = r"(?m)STARTING\s+WITH\s+GENDER\s+(\w+)"
 withSingleArrayOfBoneText = withFileInformationProcessed.select(
   col('filename'),
@@ -168,12 +168,12 @@ oneRowPerBoneText = withSingleArrayOfBoneText.select(
   explode(col('boneText')).alias('boneText'),
 )
 
-boneNameRegExp = r"(?m)(A|AN)\s+(\w+)\s+BONE\s+OF\s+MEASUREMENTS"
+boneNameRegExp = r"(?m)((A|AN)\s+)?(\w+)\s+BONE\s+OF\s+MEASUREMENTS"
 boneMeasurementsRegExp = r"(?m)((\w+)\s+=\s+\d*\.?\d+)"
 oneRowPerBone = oneRowPerBoneText.select(
   col('filename'),
   col('gender'),
-  regexp_extract(col('boneText'), boneNameRegExp, 2).alias('bone'),
+  regexp_extract(col('boneText'), boneNameRegExp, 3).alias('bone'),
   regexp_extract_all(
     col('boneText'),
     lit(boneMeasurementsRegExp)
