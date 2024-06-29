@@ -34,8 +34,10 @@ That represents a radiography with bones and its measurements.
 import os
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import udf, col, regexp_extract_all, lit
-from pyspark.sql.types import StringType
+from pyspark.sql.functions import col, regexp_extract_all, lit, split, base64, \
+                                  element_at
+from pyspark.sql.types import StringType, StructType, StructField, BinaryType, \
+                              TimestampType, LongType
 
 absPath = os.path.abspath(__file__)
 filesFolderPath = os.path.join(os.path.dirname(absPath), 'files')
@@ -45,30 +47,32 @@ spark = SparkSession \
         .appName('StructuredStreamingExample') \
         .getOrCreate()
 
+schema = StructType([
+    StructField("path", StringType(), True), # True means that it can be null
+    StructField("modificationTime", TimestampType(), True),
+    StructField("length", LongType(), True),
+    StructField("content", BinaryType(), True)
+])
+
 file = spark \
         .readStream \
-        .format('text') \
-        .option('wholeText', 'true') \
-        .option('path', filesFolderPath) \
-        .load()
+        .format('binaryFile') \
+        .schema(schema) \
+        .load(filesFolderPath)
 
 boneRegExp = r"(?m)((A|AN)\s+\w+\s+BONE\s+OF\s+MEASUREMENTS\s+(\w+\s+=\s+(\d*\.?\d+)\s+)+)"
-allBoneText = file.select(regexp_extract_all('value', lit(boneRegExp)).alias('boneText'))
-
-def process_batch(df, epoch_id):
-    # Collect the results
-    results = df.collect()
-    
-    print(f"\nBatch {epoch_id}:")
-    for row in results:
-        print("\nBone entries:")
-        for bone_text in row['boneText']:
-            print(bone_text)
-            print("---")  # Separator between bone entries
+allBoneText = file.select(
+    element_at(split('path', r'[\\/]'), -1),
+    regexp_extract_all(
+      col('content').cast(StringType()),
+      lit(boneRegExp)
+    ).alias('boneText')
+)
 
 query = allBoneText \
           .writeStream \
-          .foreachBatch(process_batch) \
+          .format('console') \
+          .option("truncate", "false")  \
           .start()
 
 query.awaitTermination()
