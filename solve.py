@@ -35,7 +35,7 @@ import os
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, regexp_extract_all, lit, split, explode, \
-                                  element_at, regexp_extract
+                                  element_at, regexp_extract, abs, min, filter
 from pyspark.sql.types import StringType, StructType, StructField, BinaryType, \
                               TimestampType, LongType, FloatType
 
@@ -134,7 +134,7 @@ oneRowPerAtlasBoneMeasurement = oneRowPerAtlasBoneMeasurementText.select(
     col('measurementText'),
     atlasBoneMeasurementsRegExp,
     2
-  ).alias('measurement_value'),
+  ).alias('measurement_value').cast(FloatType()),
 )
 
 oneRowPerAtlasBoneMeasurement.show()
@@ -154,8 +154,10 @@ withFileInformationProcessed = radiographyFile.select(
 )
 
 boneRegExp = r"(?m)((A|AN)\s+\w+\s+BONE\s+OF\s+MEASUREMENTS\s+(\w+\s+=\s+(\d*\.?\d+)\s+)+)"
+genderRegExp = r"(?m)STARTING\s+WITH\s+GENDER\s+(\w+)"
 withSingleArrayOfBoneText = withFileInformationProcessed.select(
   col('filename'),
+  regexp_extract(col('content'), genderRegExp, 1).alias('gender'),
   regexp_extract_all(
     col('content'),
     lit(boneRegExp)
@@ -163,6 +165,7 @@ withSingleArrayOfBoneText = withFileInformationProcessed.select(
 )
 oneRowPerBoneText = withSingleArrayOfBoneText.select(
   col('filename'),
+  col('gender'),
   explode(col('boneText')).alias('boneText'),
 )
 
@@ -170,6 +173,7 @@ boneNameRegExp = r"(?m)(A|AN)\s+(\w+)\s+BONE\s+OF\s+MEASUREMENTS"
 boneMeasurementsRegExp = r"(?m)((\w+)\s+=\s+\d*\.?\d+)"
 oneRowPerBone = oneRowPerBoneText.select(
   col('filename'),
+  col('gender'),
   regexp_extract(col('boneText'), boneNameRegExp, 2).alias('bone'),
   regexp_extract_all(
     col('boneText'),
@@ -179,6 +183,7 @@ oneRowPerBone = oneRowPerBoneText.select(
 
 oneRowPerBoneMeasurementText = oneRowPerBone.select(
   col('filename'),
+  col('gender'),
   col('bone'),
   explode(col('measurements')).alias('measurements'),
 )
@@ -187,6 +192,7 @@ measurementNameRegExp = r"(\w+)\s+=\s+\d*\.?\d+"
 measurementValueRegExp = r"\w+\s+=\s+(\d*\.?\d+)"
 oneRowPerBoneMeasurement = oneRowPerBoneMeasurementText.select(
   col('filename'),
+  col('gender'),
   col('bone'),
   regexp_extract(
     col('measurements'),
@@ -200,30 +206,59 @@ oneRowPerBoneMeasurement = oneRowPerBoneMeasurementText.select(
   ).alias('measurement_value').cast(FloatType()),
 )
 
+# Calculate the minimum difference atlas radiography against our radiography
+def process_batch(batch_df, batch_id):
+  radiographyAndAtlasRadiographiesJoin = batch_df.join(
+    oneRowPerAtlasBoneMeasurement,
+    on=['gender', 'bone', 'measurement_name'],
+    how="left"
+  )
 
-# Have a dataframe with the gender of the input radiographies
+  withDifferences = radiographyAndAtlasRadiographiesJoin.select(
+    oneRowPerBoneMeasurement['filename'],
+    oneRowPerBoneMeasurement['gender'],
+    oneRowPerBoneMeasurement['bone'],
+    oneRowPerBoneMeasurement['measurement_name'],
+    oneRowPerBoneMeasurement['measurement_value'],
+    oneRowPerAtlasBoneMeasurement['gender'].alias('atlas_gender'),
+    oneRowPerAtlasBoneMeasurement['age'].alias('atlas_age'),
+    oneRowPerAtlasBoneMeasurement['bone'].alias('atlas_bone'),
+    oneRowPerAtlasBoneMeasurement['measurement_name'] \
+        .alias('atlas_measurement_name'),
+    oneRowPerAtlasBoneMeasurement['measurement_value'] \
+        .alias('atlas_measurement_value'),
+    abs((oneRowPerAtlasBoneMeasurement['measurement_value'] -
+        oneRowPerBoneMeasurement['measurement_value'])) \
+          .alias('measurement_values_difference')
+  )
 
-genderRegExp = r"(?m)STARTING\s+WITH\s+GENDER\s+(\w+)"
-withGender = withFileInformationProcessed.select(
-  col('filename'),
-  regexp_extract(col('content'), genderRegExp, 1).alias('gender'),
-)
+  totalDifferences = withDifferences \
+    .groupBy(['filename', 'atlas_age']) \
+    .sum("measurement_values_difference")
+  
+  smallestDifferences = totalDifferences \
+    .groupBy(['filename']) \
+    .min("sum(measurement_values_difference)")
+  
+  withMinimumDifferences = totalDifferences \
+    .join(smallestDifferences, on='filename', how='left')
+  
+  finalAgesWithUnwantedColumns = withMinimumDifferences \
+    .filter(withMinimumDifferences['sum(measurement_values_difference)'] == \
+            withMinimumDifferences['min(sum(measurement_values_difference))'])
 
+  finalAges = finalAgesWithUnwantedColumns.select(
+    col('filename'),
+    col('atlas_age').alias('age')
+  )
 
+  finalAges.show(truncate=False)
 
 query = oneRowPerBoneMeasurement \
           .writeStream \
-          .format('console') \
-          .option("truncate", "false")  \
-          .start()
-
-query2 = withGender \
-          .writeStream \
-          .format('console') \
-          .option("truncate", "false")  \
+          .foreachBatch(process_batch) \
           .start()
 
 query.awaitTermination()
-query2.awaitTermination()
 
 spark.stop()
