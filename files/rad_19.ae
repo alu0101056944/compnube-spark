@@ -1,0 +1,20 @@
+COMPARE THE RADIOGRAPHY OBSERVED BY Ibrahim
+  USING THE realAtlas ATLAS
+  STARTING WITH GENDER male
+  DEFINED BY
+    A Radius BONE OF MEASUREMENTS
+    length = 9.5
+    width = 20.8
+
+    A Ulna BONE OF MEASUREMENTS
+    length = 6.8
+    width = 11.0
+
+    Intersesamoids BONE OF MEASUREMENTS
+    distance = 0.6
+
+    A Metacarpal BONE OF MEASUREMENTS
+    length = 4.4
+    widthEpiphysis2 = 9.6
+    widthEpiphysis3 = 10.1
+    widthEpiphysis4 = 8.4

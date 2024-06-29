@@ -137,7 +137,6 @@ oneRowPerAtlasBoneMeasurement = oneRowPerAtlasBoneMeasurementText.select(
   ).alias('measurement_value').cast(FloatType()),
 )
 
-oneRowPerAtlasBoneMeasurement.show()
 
 # Stream File processing
 

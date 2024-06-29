@@ -3,18 +3,18 @@ COMPARE THE RADIOGRAPHY OBSERVED BY Ibrahim
   STARTING WITH GENDER male
   DEFINED BY
     A Radius BONE OF MEASUREMENTS
-    length = 9.5
-    width = 20.8
-
-    A Ulna BONE OF MEASUREMENTS
-    length = 6.8
-    width = 11.0
-
-    Intersesamoids BONE OF MEASUREMENTS
-    distance = 0.6
+    length = 7.2
+    width = 16
+    
+    AN Ulna BONE OF MEASUREMENTS
+    length = 5.1
+    width = 8.4
 
     A Metacarpal BONE OF MEASUREMENTS
-    length = 4.4
-    widthEpiphysis2 = 9.6
-    widthEpiphysis3 = 10.1
-    widthEpiphysis4 = 8.4
+    length = 3.7
+    widthEpiphysis2 = 9.5
+    widthEpiphysis3 = 10.134
+    widthEpiphysis4 = 8.394
+
+    AN Intersesamoids BONE OF MEASUREMENTS
+    distance = 1.2
