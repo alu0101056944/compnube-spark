@@ -85,9 +85,30 @@ oneRowPerBone = oneRowPerBoneText.select(
   ).alias('measurements'),
 )
 
+oneRowPerBoneMeasurementText = oneRowPerBone.select(
+  col('filename'),
+  col('bone'),
+  explode(col('measurements')).alias('measurements'),
+)
 
+measurementNameRegExp = r"(\w+)\s+=\s+\d*\.?\d+"
+measurementValueRegExp = r"\w+\s+=\s+(\d*\.?\d+)"
+oneRowPerBoneMeasurement = oneRowPerBoneMeasurementText.select(
+  col('filename'),
+  col('bone'),
+  regexp_extract(
+    col('measurements'),
+    measurementNameRegExp,
+    1
+  ).alias('measurement_name'),
+  regexp_extract(
+    col('measurements'),
+    measurementValueRegExp,
+    1
+  ).alias('measurement_value'),
+)
 
-query = oneRowPerBone \
+query = oneRowPerBoneMeasurement \
           .writeStream \
           .format('console') \
           .option("truncate", "false")  \
