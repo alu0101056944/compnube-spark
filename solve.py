@@ -34,8 +34,8 @@ That represents a radiography with bones and its measurements.
 import os
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, regexp_extract_all, lit, split, base64, \
-                                  element_at
+from pyspark.sql.functions import col, regexp_extract_all, lit, split, explode, \
+                                  element_at, regexp_extract
 from pyspark.sql.types import StringType, StructType, StructField, BinaryType, \
                               TimestampType, LongType
 
@@ -61,15 +61,33 @@ file = spark \
         .load(filesFolderPath)
 
 boneRegExp = r"(?m)((A|AN)\s+\w+\s+BONE\s+OF\s+MEASUREMENTS\s+(\w+\s+=\s+(\d*\.?\d+)\s+)+)"
-allBoneText = file.select(
-    element_at(split('path', r'[\\/]'), -1),
-    regexp_extract_all(
-      col('content').cast(StringType()),
-      lit(boneRegExp)
-    ).alias('boneText')
+withSingleArrayOfBoneText = file.select(
+  element_at(split('path', r'[\\/]'), -1).alias('filename'),
+  regexp_extract_all(
+    col('content').cast(StringType()),
+    lit(boneRegExp)
+  ).alias('boneText')
 )
 
-query = allBoneText \
+oneRowPerBoneText = withSingleArrayOfBoneText.select(
+  col('filename'),
+  explode(col('boneText')).alias('boneText'),
+)
+
+boneNameRegExp = r"(?m)(A|AN)\s+(\w+)\s+BONE\s+OF\s+MEASUREMENTS"
+boneMeasurementsRegExp = r"(?m)((\w+)\s+=\s+\d*\.?\d+)"
+oneRowPerBone = oneRowPerBoneText.select(
+  col('filename'),
+  regexp_extract(col('boneText'), boneNameRegExp, 2).alias('bone'),
+  regexp_extract_all(
+    col('boneText'),
+    lit(boneMeasurementsRegExp)
+  ).alias('measurements'),
+)
+
+
+
+query = oneRowPerBone \
           .writeStream \
           .format('console') \
           .option("truncate", "false")  \
